@@ -124,6 +124,13 @@ air_features: dict = {
         'modes': ['manual', 'auto', 'sleep', 'off', 'pet'],
         'features': ['air_quality'],
         'levels': list(range(1, 5))
+    },
+    'LTF-F422S-WUS': {
+        'module': 'VeSyncTowerFan',
+        'models': ['LTF-F422S-WUS'],
+        'modes': ['turbo', 'auto', 'normal'],
+        'features': [],
+        'levels': list(range(1,13))
     }
 }
 
@@ -2700,3 +2707,370 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
         else:
             logger.debug('Error in api return json for %s', self.device_name)
         return False
+    
+
+class VeSyncTowerFan(VeSyncBaseDevice):
+    """Levoit TowerFan LTF-F422S-WUS Specific class."""
+
+    def __init__(self, details, manager):
+        """Initialize Levoit Towerfan device class."""
+        super().__init__(details, manager)
+        self.enabled = True
+        self.config_dict = model_features(self.device_type)
+        self.features = self.config_dict.get('features', [])
+        if not isinstance(self.config_dict.get('modes'), list):
+            logger.error(
+                'Please set modes for %s in the configuration',
+                self.device_type)
+            raise KeyError(f'Modes not set in configuration for {self.device_name}')
+        self.modes = self.config_dict['modes']
+        self.connection_status = details.get('deviceProp', {}).get(
+            'connectionStatus', None)
+        self.config: Dict[str, Union[str, int, float, bool]] = {}
+
+        self._api_modes = ['getTowerFanStatus', 'setSwitch', 'setLevel', 'setTowerFanMode',
+                           'setOscillationSwitch', 'setMuteSwitch', 'setDisplay']
+
+    def build_api_dict(self, method: str) -> Tuple[Dict, Dict]:
+        """Build device api body dictionary."""
+        if method not in self._api_modes:
+            logger.debug('Invalid mode - %s', method)
+            return {}, {}
+        head = Helpers.bypass_header()
+        body = Helpers.bypass_body_v2(self.manager)
+        body['cid'] = self.cid
+        body['configModule'] = self.config_module
+        body['payload'] = {
+            'method': method,
+            'source': 'APP'
+        }
+        return head, body
+
+    def build_towerfan_dict(self, dev_dict: dict) -> None:
+        """Build Towerfan purifier status dictionary."""
+        self.details = {}
+        self.enabled = dev_dict.get('powerSwitch', 1) == 1
+        if self.enabled:
+            self.device_status = 'on'
+        else:
+            self.device_status = 'off'
+        
+        self.mode = dev_dict.get('workMode', 'normal')
+        self.details['mode'] = self.mode
+        self.speed = dev_dict.get('fanSpeedLevel', 0)
+        self.details['level'] = self.speed
+        self.details['display'] = dev_dict.get('screenState', 0) == 1
+        self.details['oscillating'] = dev_dict.get('oscillationState', 0) == 1
+        self.details['mute'] = dev_dict.get('muteState', 0) == 1
+        self.details['temperature'] = dev_dict.get('temperature', 0.0) / 10.0
+        self.details['humidity'] = dev_dict.get('humidity', 0)
+
+    # def build_config_dict(self, conf_dict: Dict[str, str]) -> None:
+    #     """Build configuration dict for Towerfan purifier."""
+    #     self.config['powerSwitch'] = conf_dict.get('display', False)
+    #     self.config['display_forever'] = conf_dict.get('display_forever',
+    #                                                    False)
+
+    def get_details(self) -> None:
+        """Build Tower Fan details dictionary."""
+        head = Helpers.bypass_header()
+        body = Helpers.bypass_body_v2(self.manager)
+        body['cid'] = self.cid
+        body['configModule'] = self.config_module
+        body['payload'] = {
+            'method': 'getTowerFanStatus',
+            'source': 'APP',
+            'data': {}
+        }
+
+        r, _ = Helpers.call_api(
+            '/cloud/v2/deviceManaged/bypassV2',
+            method='post',
+            headers=head,
+            json_object=body,
+        )
+        if not isinstance(r, dict):
+            logger.debug('Error in towerfan response')
+            return
+        if not isinstance(r.get('result'), dict):
+            logger.debug('Error in towerfan response')
+            return
+        outer_result = r.get('result', {})
+        inner_result = None
+
+        if outer_result:
+            inner_result = r.get('result', {}).get('result')
+        if inner_result is not None and Helpers.code_check(r):
+            if outer_result.get('code') == 0:
+                self.build_towerfan_dict(inner_result)
+            else:
+                logger.debug('error in inner result dict from purifier')
+            if inner_result.get('configuration', {}):
+                self.build_config_dict(inner_result.get('configuration', {}))
+            else:
+                logger.debug('No configuration found in towerfan status')
+        else:
+            logger.debug('Error in towerfan response')
+
+    def update(self):
+        """Update Purifier details."""
+        self.get_details()
+
+    def display(self) -> None:
+        """Return formatted device info to stdout."""
+        super().display()
+        disp = [
+            ('Mode: ', self.mode, ''),
+            ('Status', self.device_status, ''),
+            ('Fan Level: ', self.speed, ''),
+            ('Display: ', self.details['display'], ''),
+            ('Oscillating: ', self.details['oscillating'], ''),
+            ('Muted: ', self.details['mute'], ''),
+            ('Temperature: ', self.details['temperature'], ''),
+            ('Humidity: ', self.details['humidity'], '')
+        ]
+
+        for line in disp:
+            print(f'{line[0]:.<30} {line[1]} {line[2]}')
+
+    def displayJSON(self) -> str:
+        """Return air purifier status and properties in JSON output."""
+        sup = super().displayJSON()
+        sup_val = json.loads(sup)
+        sup_val.update(
+            {
+                'Mode': self.mode,
+                'Status': self.device_status,
+                'Fan Level': str(self.speed),
+                'Display': self.details['display'],
+                'Oscillating': self.details['oscillating'],
+                'Muted': str(self.details['mute']),
+                'Temperature': str(self.details['temperature']),
+                'Humidity': str(self.details['humidity']),
+            }
+        )
+
+        return json.dumps(sup_val, indent=4)
+
+    def change_fan_speed(self,
+                         speed=None) -> bool:
+        """Change fan speed based on levels in configuration dict."""
+        speeds: list = self.config_dict.get('levels', [])
+        current_speed = self.speed
+
+        if speed is not None:
+            if speed not in speeds:
+                logger.debug("%s is invalid speed - valid speeds are %s",
+                             speed, str(speeds))
+                return False
+            new_speed = speed
+        else:
+            if current_speed == speeds[-1]:
+                new_speed = speeds[0]
+            else:
+                current_index = speeds.index(current_speed)
+                new_speed = speeds[current_index + 1]
+
+        body = Helpers.req_body(self.manager, 'devicestatus')
+        body['uuid'] = self.uuid
+
+        head, body = self.build_api_dict('setLevel')
+        if not head and not body:
+            return False
+
+        body['payload']['data'] = {
+            'levelIdx': 0,
+            'manualSpeedLevel': new_speed,
+            'levelType': 'wind',
+        }
+
+        r, _ = Helpers.call_api(
+            '/cloud/v2/deviceManaged/bypassV2',
+            method='post',
+            headers=head,
+            json_object=body,
+        )
+
+        if r is not None and Helpers.code_check(r):
+            self.speed = new_speed
+            return True
+        logger.debug('Error changing %s speed', self.device_name)
+        return False
+    
+    def mode_toggle(self, mode: str) -> bool:
+        """Set TowerFan mode."""
+        logger.debug(','.join(self.modes))
+        if mode.lower() not in self.modes:
+            logger.debug('Invalid towerfan mode used - %s - must be in %s.',
+                         mode, ','.join(self.modes))
+            return False
+        head, body = self.build_api_dict('setTowerFanMode')
+        if not head and not body:
+            return False
+
+        body['payload']['data'] = {
+            'workMode': mode.lower()
+        }
+
+        r, _ = Helpers.call_api(
+            '/cloud/v2/deviceManaged/bypassV2',
+            method='post',
+            headers=head,
+            json_object=body,
+        )
+
+        if Helpers.code_check(r):
+            return True
+
+        logger.debug('Error setting towerfan mode')
+        return False
+
+    def manual_mode(self) -> bool:
+        """Set mode to manual."""
+        if 'normal' not in self.modes:
+            logger.debug('%s does not have manual mode', self.device_name)
+            return False
+        return self.mode_toggle('normal')
+
+    def toggle_switch(self, toggle: bool) -> bool:
+        """Toggle purifier on/off."""
+        if not isinstance(toggle, bool):
+            logger.debug('Invalid toggle value for towerfan switch')
+            return False
+
+        head = Helpers.bypass_header()
+        body = Helpers.bypass_body_v2(self.manager)
+        body['cid'] = self.cid
+        body['configModule'] = self.config_module
+        body['payload'] = {
+            'data': {
+                'powerSwitch': 1 if toggle else 0,
+                'switchIdx': 0
+            },
+            'method': 'setSwitch',
+            'source': 'APP'
+        }
+
+        r, _ = Helpers.call_api(
+            '/cloud/v2/deviceManaged/bypassV2',
+            method='post',
+            headers=head,
+            json_object=body,
+        )
+
+        if r is not None and Helpers.code_check(r):
+            if toggle:
+                self.device_status = 'on'
+            else:
+                self.device_status = 'off'
+            return True
+        logger.debug("Error toggling towerfan - %s",
+                     self.device_name)
+        return False
+    
+    def turn_on(self) -> bool:
+        """Turn TowerFan on."""
+        return self.toggle_switch(True)
+
+    def turn_off(self):
+        """Turn TowerFan off."""
+        return self.toggle_switch(False)
+
+    def set_display(self, mode: bool) -> bool:
+        """Toggle display on/off."""
+        if not isinstance(mode, bool):
+            logger.debug("Mode must be True or False")
+            return False
+
+        head, body = self.build_api_dict('setDisplay')
+
+        body['payload']['data'] = {
+            'screenSwitch': 1 if mode else 0
+        }
+
+        r, _ = Helpers.call_api(
+            '/cloud/v2/deviceManaged/bypassV2',
+            method='post',
+            headers=head,
+            json_object=body,
+        )
+
+        if r is not None and Helpers.code_check(r):
+            return True
+        logger.debug("Error toggling towerfan display - %s",
+                     self.device_name)
+        return False
+
+    def turn_on_display(self) -> bool:
+        """Turn Display on."""
+        return self.set_display(True)
+
+    def turn_off_display(self):
+        """Turn Display off."""
+        return self.set_display(False)
+
+    def set_oscillating(self, mode: bool) -> bool:
+        """Toggle oscillating on/off."""
+        if not isinstance(mode, bool):
+            logger.debug("Mode must be True or False")
+            return False
+
+        head, body = self.build_api_dict('setOscillationSwitch')
+
+        body['payload']['data'] = {
+            'oscillationSwitch': 1 if mode else 0
+        }
+
+        r, _ = Helpers.call_api(
+            '/cloud/v2/deviceManaged/bypassV2',
+            method='post',
+            headers=head,
+            json_object=body,
+        )
+
+        if r is not None and Helpers.code_check(r):
+            return True
+        logger.debug("Error toggling towerfan oscillating - %s",
+                     self.device_name)
+        return False
+
+    def turn_on_oscillating(self) -> bool:
+        """Turn oscillating on."""
+        return self.set_oscillating(True)
+
+    def turn_off_oscillating(self):
+        """Turn oscillating off."""
+        return self.set_oscillating(False)
+
+    def set_sound(self, mode: bool) -> bool:
+        """Toggle sound on/off."""
+        if not isinstance(mode, bool):
+            logger.debug("Mode must be True or False")
+            return False
+
+        head, body = self.build_api_dict('setMuteSwitch')
+
+        body['payload']['data'] = {
+            'muteSwitch': 1 if mode else 0
+        }
+
+        r, _ = Helpers.call_api(
+            '/cloud/v2/deviceManaged/bypassV2',
+            method='post',
+            headers=head,
+            json_object=body,
+        )
+
+        if r is not None and Helpers.code_check(r):
+            return True
+        logger.debug("Error toggling towerfan sound - %s",
+                     self.device_name)
+        return False
+
+    def turn_on_sound(self) -> bool:
+        """Turn sound on."""
+        return self.set_sound(True)
+
+    def turn_off_sound(self):
+        """Turn sound off."""
+        return self.set_sound(False)
