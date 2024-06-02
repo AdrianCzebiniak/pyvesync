@@ -128,7 +128,7 @@ air_features: dict = {
     'LTF-F422S-WUS': {
         'module': 'VeSyncTowerFan',
         'models': ['LTF-F422S-WUS'],
-        'modes': ['turbo', 'auto', 'normal'],
+        'modes': ['turbo', 'auto', 'manual'],
         'features': [],
         'levels': list(range(1,13))
     }
@@ -2755,7 +2755,7 @@ class VeSyncTowerFan(VeSyncBaseDevice):
         else:
             self.device_status = 'off'
         
-        self.mode = dev_dict.get('workMode', 'normal')
+        self.mode = dev_dict.get('workMode', 'manual')
         self.details['mode'] = self.mode
         self.speed = dev_dict.get('fanSpeedLevel', 0)
         self.details['level'] = self.speed
@@ -2908,6 +2908,9 @@ class VeSyncTowerFan(VeSyncBaseDevice):
         if not head and not body:
             return False
 
+        if mode == 'manual':
+            mode = 'normal'
+
         body['payload']['data'] = {
             'workMode': mode.lower()
         }
@@ -2927,10 +2930,24 @@ class VeSyncTowerFan(VeSyncBaseDevice):
 
     def manual_mode(self) -> bool:
         """Set mode to manual."""
-        if 'normal' not in self.modes:
+        if 'manual' not in self.modes:
             logger.debug('%s does not have manual mode', self.device_name)
             return False
-        return self.mode_toggle('normal')
+        return self.mode_toggle('manual')
+
+    def sleep_mode(self) -> bool:
+        """Set sleep mode to on."""
+        if 'sleep' not in self.modes:
+            logger.debug('%s does not have sleep mode', self.device_name)
+            return False
+        return self.mode_toggle('sleep')
+
+    def auto_mode(self) -> bool:
+        """Set mode to auto."""
+        if 'auto' not in self.modes:
+            logger.debug('%s does not have auto mode', self.device_name)
+            return False
+        return self.mode_toggle('auto')
 
     def toggle_switch(self, toggle: bool) -> bool:
         """Toggle purifier on/off."""
