@@ -2761,15 +2761,15 @@ class VeSyncTowerFan(VeSyncBaseDevice):
         self.details['level'] = self.speed
         self.details['display'] = dev_dict.get('screenState', 0) == 1
         self.details['oscillating'] = dev_dict.get('oscillationState', 0) == 1
-        self.details['mute'] = dev_dict.get('muteState', 0) == 1
+        self.details['sound'] = dev_dict.get('muteState', 0) == 1
         self.details['temperature'] = dev_dict.get('temperature', 0.0) / 10.0
         self.details['humidity'] = dev_dict.get('humidity', 0)
 
-    # def build_config_dict(self, conf_dict: Dict[str, str]) -> None:
-    #     """Build configuration dict for Towerfan purifier."""
-    #     self.config['powerSwitch'] = conf_dict.get('display', False)
-    #     self.config['display_forever'] = conf_dict.get('display_forever',
-    #                                                    False)
+    def build_config_dict(self, conf_dict: Dict[str, str]) -> None:
+        """Build configuration dict for Towerfan purifier."""
+        self.config['display'] = conf_dict.get('display', False)
+        self.config['oscillating'] = conf_dict.get('oscillating', False)
+        self.config['sound'] = conf_dict.get('sound', False)
 
     def get_details(self) -> None:
         """Build Tower Fan details dictionary."""
@@ -2825,7 +2825,7 @@ class VeSyncTowerFan(VeSyncBaseDevice):
             ('Fan Level: ', self.speed, ''),
             ('Display: ', self.details['display'], ''),
             ('Oscillating: ', self.details['oscillating'], ''),
-            ('Muted: ', self.details['mute'], ''),
+            ('Sound: ', self.details['sound'], ''),
             ('Temperature: ', self.details['temperature'], ''),
             ('Humidity: ', self.details['humidity'], '')
         ]
@@ -2844,7 +2844,7 @@ class VeSyncTowerFan(VeSyncBaseDevice):
                 'Fan Level': str(self.speed),
                 'Display': self.details['display'],
                 'Oscillating': self.details['oscillating'],
-                'Muted': str(self.details['mute']),
+                'Sound': str(self.details['sound']),
                 'Temperature': str(self.details['temperature']),
                 'Humidity': str(self.details['humidity']),
             }
@@ -3026,6 +3026,11 @@ class VeSyncTowerFan(VeSyncBaseDevice):
         """Turn Display off."""
         return self.set_display(False)
 
+    @property
+    def display(self) -> bool:
+        """Get child lock state."""
+        return bool(self.details['display'])
+
     def set_oscillating(self, mode: bool) -> bool:
         """Toggle oscillating on/off."""
         if not isinstance(mode, bool):
@@ -3059,6 +3064,11 @@ class VeSyncTowerFan(VeSyncBaseDevice):
         """Turn oscillating off."""
         return self.set_oscillating(False)
 
+    @property
+    def oscillating(self) -> bool:
+        """Get child lock state."""
+        return bool(self.details['oscillating'])
+
     def set_sound(self, mode: bool) -> bool:
         """Toggle sound on/off."""
         if not isinstance(mode, bool):
@@ -3091,3 +3101,8 @@ class VeSyncTowerFan(VeSyncBaseDevice):
     def turn_off_sound(self):
         """Turn sound off."""
         return self.set_sound(False)
+
+    @property
+    def sound(self) -> bool:
+        """Get child lock state."""
+        return bool(self.details['sound'])
