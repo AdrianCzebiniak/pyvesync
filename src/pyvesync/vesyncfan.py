@@ -2928,32 +2928,29 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
 
     def build_humid_dict(self, dev_dict: Dict[str, str]) -> None:
         """Build humidifier status dictionary."""
-        try:
-            power_state = dev_dict.get('powerSwitch', 0)
-            self.device_status = 'off' if power_state == 0 else 'on'
-            self.enabled = bool(power_state)
-            
-            self.details.update({
-                'humidity': int(dev_dict.get('humidity', 0)),
-                'mist_virtual_level': int(dev_dict.get('virtualLevel', 0)),
-                'mist_level': int(dev_dict.get('mistLevel', 0)),
-                'mode': dev_dict.get('workMode', 'manual').lower(),
-                'water_lacks': bool(dev_dict.get('waterLacksState', 0)),
-                'humidity_high': bool(int(dev_dict.get('targetHumidity', 0)) < 
-                                    int(dev_dict.get('humidity', 0))),
-                'water_tank_lifted': bool(dev_dict.get('waterTankLifted', 0)),
-                'automatic_stop_reach_target': bool(dev_dict.get('autoStopState', 1)),
-                'display': bool(dev_dict.get('screenState', 0))
-            })
-        except (ValueError, TypeError) as e:
-            logger.debug(f"Error building humid dict: {e}")
-            return
-
+        power_state = dev_dict.get('powerSwitch', 0)
+        self.device_status = 'off' if power_state == 0 else 'on'
+        self.enabled = bool(power_state)
+        
+        # Add missing properties
+        self.details.update({
+            'power_state': bool(power_state),
+            'humidity': int(dev_dict.get('humidity', 0)),
+            'mist_virtual_level': int(dev_dict.get('virtualLevel', 0)), 
+            'mist_level': int(dev_dict.get('mistLevel', 0)),
+            'mode': dev_dict.get('workMode', 'manual').lower(),
+            'water_lacks': bool(dev_dict.get('waterLacksState', 0)),
+            'humidity_high': bool(dev_dict.get('targetHumidity', 0) < 
+                                dev_dict.get('humidity', 0)),
+            'water_tank_lifted': bool(dev_dict.get('waterTankLifted', 0)),
+            'automatic_stop_reach_target': bool(dev_dict.get('autoStopState', 1)),
+            'display': bool(dev_dict.get('screenState', 0)),
+            'night_light_brightness': dev_dict.get('nightLightBrightness', 0)
+        })
 
     def build_config_dict(self, conf_dict):
         """Build configuration dict for humidifier."""
-        self.config['auto_target_humidity'] = conf_dict.get(
-            'targetHumidity', 0)
+        self.config['auto_target_humidity'] = conf_dict.get('targetHumidity', 0)
         self.config['display'] = bool(conf_dict.get('screenSwitch', 0))
         self.config['automatic_stop'] = bool(conf_dict.get('autoStopSwitch', 1))
 
