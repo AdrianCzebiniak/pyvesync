@@ -2928,21 +2928,27 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
 
     def build_humid_dict(self, dev_dict: Dict[str, str]) -> None:
         """Build humidifier status dictionary."""
-        super().build_humid_dict(dev_dict)
-        self.device_status = 'off' if dev_dict.get('powerSwitch', 0) == 0 else 'on'
-        self.details['mist_virtual_level'] = dev_dict.get(
-            'virtualLevel', 0)
-        self.details['mist_level'] = dev_dict.get('mistLevel', 0)
-        self.details['mode'] = dev_dict.get('workMode', 'manual')
-        self.details['water_lacks'] = bool(dev_dict.get('waterLacksState', 0))
-        self.details['humidity_high'] = bool(int(dev_dict.get('targetHumidity', 0)) <
-                                             int(dev_dict.get('humidity', 0)))
-        self.details['water_tank_lifted'] = bool(dev_dict.get(
-            'waterTankLifted', 0))
-        self.details['automatic_stop_reach_target'] = bool(dev_dict.get(
-            'autoStopState', 1
-        ))
-        self.details['display'] = bool(dev_dict['screenState'])
+        try:
+            power_state = dev_dict.get('powerSwitch', 0)
+            self.device_status = 'off' if power_state == 0 else 'on'
+            self.enabled = bool(power_state)
+            
+            self.details.update({
+                'humidity': int(dev_dict.get('humidity', 0)),
+                'mist_virtual_level': int(dev_dict.get('virtualLevel', 0)),
+                'mist_level': int(dev_dict.get('mistLevel', 0)),
+                'mode': dev_dict.get('workMode', 'manual').lower(),
+                'water_lacks': bool(dev_dict.get('waterLacksState', 0)),
+                'humidity_high': bool(int(dev_dict.get('targetHumidity', 0)) < 
+                                    int(dev_dict.get('humidity', 0))),
+                'water_tank_lifted': bool(dev_dict.get('waterTankLifted', 0)),
+                'automatic_stop_reach_target': bool(dev_dict.get('autoStopState', 1)),
+                'display': bool(dev_dict.get('screenState', 0))
+            })
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Error building humid dict: {e}")
+            return
+
 
     def build_config_dict(self, conf_dict):
         """Build configuration dict for humidifier."""
