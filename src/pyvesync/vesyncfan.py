@@ -2994,8 +2994,12 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
             logger.debug('%s device offline', self.device_name)
             self.connection_status = 'offline'
             self.device_status = 'off'
-        else:
-            logger.debug('Error in humidifier response')
+            self.enabled = False
+        elif inner_result is not None and Helpers.code_check(r):
+            if outer_result.get('code') == 0:
+                self.connection_status = 'online'
+                self.build_humid_dict(inner_result)
+                logger.debug('Error in humidifier response')
 
     def set_display(self, mode: bool) -> bool:
         """Toggle display on/off."""
