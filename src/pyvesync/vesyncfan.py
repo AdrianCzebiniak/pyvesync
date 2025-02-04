@@ -2941,6 +2941,7 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
         self.connection_status = details.get('deviceProp', {}).get(
             'connectionStatus', None)
 
+        self.enabled = True
         self._api_modes = ['getHumidifierStatus', 'setAutoStopSwitch',
                            'setSwitch', 'setVirtualLevel', 'setTargetHumidity',
                            'setHumidityMode', 'setDisplay']
