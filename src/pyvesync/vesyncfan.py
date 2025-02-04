@@ -2941,7 +2941,6 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
         self.connection_status = details.get('deviceProp', {}).get(
             'connectionStatus', None)
 
-        self.enabled = True
         self._api_modes = ['getHumidifierStatus', 'setAutoStopSwitch',
                            'setSwitch', 'setVirtualLevel', 'setTargetHumidity',
                            'setHumidityMode', 'setDisplay']
@@ -2950,7 +2949,7 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
         """Build humidifier status dictionary."""
         power_state = dev_dict.get('powerSwitch', 0)
 
-        self.enabled = dev_dict.get('enabled')
+        self.enabled = dev_dict.get('enabled', True)
         self.device_status = 'on' if self.enabled else 'off'
         
         # Add missing properties
@@ -3012,7 +3011,6 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
             logger.debug('%s device offline', self.device_name)
             self.connection_status = 'offline'
             self.device_status = 'off'
-            self.enabled = False
         elif inner_result is not None and Helpers.code_check(r):
             if outer_result.get('code') == 0:
                 self.connection_status = 'online'
