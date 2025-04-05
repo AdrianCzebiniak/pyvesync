@@ -2949,7 +2949,7 @@ class VeSyncHumid1000S(VeSyncHumid200300S):
         """Build humidifier status dictionary."""
         power_state = dev_dict.get('powerSwitch', 0)
 
-        self.enabled = dev_dict.get('enabled', True)
+        self.enabled = (power_state != 0)
         self.device_status = 'on' if self.enabled else 'off'
         
         # Add missing properties
